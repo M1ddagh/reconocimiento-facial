@@ -1,0 +1,179 @@
+services:
+  # -------------------------------------------------------------
+  # Redis: Cola de eventos (Lists) y Broker de Alertas (PubSub)
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: rf_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------------------------------------------
+  # PostgreSQL: Metadatos relacionales (cámaras, personas, alertas)
+  # -------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: rf_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reconocimiento_facial
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: app_secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d reconocimiento_facial"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------------------------------------------
+  # MinIO: Almacenamiento S3 de capturas (crops) y evidencias
+  # -------------------------------------------------------------
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: rf_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  # -------------------------------------------------------------
+  # Search Service: Consumidor de eventos y Búsqueda FAISS 512D
+  # -------------------------------------------------------------
+  search_service:
+    build:
+      context: .
+      dockerfile: search_service/Dockerfile
+    container_name: rf_search_service
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - QUEUE_NAME=face_events_queue
+      - ALERTS_CHANNEL=alerts_channel
+      - SIMILARITY_THRESHOLD=0.65
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./search_service:/app/search_service
+
+  # -------------------------------------------------------------
+  # Backend API Gateway: FastAPI + WebSockets
+  # -------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: rf_backend
+    restart: unless-stopped
+    ports:
+      # Enlazar a loopback en host para evitar exponer rutas internas fuera de la red local
+      - "127.0.0.1:8000:8000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-rf_secret_compartido_dev_mvp}
+      - ENABLE_REDIS=true
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://app_user:app_secure_password@postgres:5432/reconocimiento_facial
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadminpassword
+      - S3_BUCKET=evidencias-rostros
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    volumes:
+      - ./backend:/app/backend
+      - ./backend/uploads:/app/backend/uploads
+      - ./search_service:/app/search_service
+      - ${USERPROFILE:-~}/.insightface:/root/.insightface:ro
+
+  # -------------------------------------------------------------
+  # Frontend Dashboard: React + TypeScript
+  # -------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rf_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  # -------------------------------------------------------------
+  # AI Worker Supervisor: Reconciliación y Orquestación de Workers
+  # -------------------------------------------------------------
+  supervisor:
+    build:
+      context: .
+      dockerfile: ai_worker/Dockerfile
+    container_name: rf_supervisor
+    command: ["python", "-m", "ai_worker.supervisor"]
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - BACKEND_URL=http://backend:8000
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-rf_secret_compartido_dev_mvp}
+      - REDIS_URL=redis://redis:6379/0
+      - QUEUE_NAME=face_events_queue
+      - USE_CPU=true
+      - SUPERVISOR_POLL_INTERVAL=5.0
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./ai_worker:/app/ai_worker
+      - ${USERPROFILE:-~}/.insightface:/root/.insightface:ro
+
+  # -------------------------------------------------------------
+  # AI Worker Manual (Solo para pruebas locales directas / Webcam)
+  # Activación explícita: docker compose --profile manual-worker up
+  # ADVERTENCIA: NO usar simultáneamente con el servicio supervisor.
+  # -------------------------------------------------------------
+  ai_worker:
+    profiles:
+      - manual-worker
+    build:
+      context: .
+      dockerfile: ai_worker/Dockerfile
+    container_name: rf_ai_worker_manual
+    restart: "no"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - QUEUE_NAME=face_events_queue
+      - VIDEO_SOURCE=0
+      - CAMERA_ID=camera_01
+      - USE_CPU=true
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis_data:
+  postgres_data:
+  minio_data:

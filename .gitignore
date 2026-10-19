@@ -1,0 +1,148 @@
+# ==============================================================================
+# .gitignore - Sistema de Reconocimiento Facial Distribuido
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. SEGURIDAD Y CONFIGURACIONES SENSIBLES (CRÍTICO)
+# ------------------------------------------------------------------------------
+# Archivo de entorno con credenciales de base de datos, secretos de API y contraseñas RTSP
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+
+# PRESERVAR la plantilla de variables de entorno para nuevos despliegues
+!.env.example
+
+# ------------------------------------------------------------------------------
+# 2. DOCUMENTACIÓN, REPORTES, PLANES Y ARCHIVOS MARKDOWN
+# ------------------------------------------------------------------------------
+# Archivos de documentación, bitácoras y diagnósticos
+docs/
+plan/
+diagnostico_operativo/
+PROJECT_CONTEXT.md
+
+# Ignorar todos los archivos Markdown (salvo el README.md principal de la raíz)
+*.md
+!/README.md
+
+# Archivos de prueba temporales sueltos
+testing.png
+prueba.jpg
+
+# ------------------------------------------------------------------------------
+# 3. SCRIPTS DE UTILIDAD Y DEMOSTRACIÓN
+# ------------------------------------------------------------------------------
+scripts/
+
+# ------------------------------------------------------------------------------
+# 4. SUITES DE PRUEBAS, BENCHMARKS Y FIXTURES
+# ------------------------------------------------------------------------------
+# Directorios de pruebas unitarias, integración y carga
+tests/
+backend/tests/
+ai_worker/tests/
+
+# Scripts sueltos de pruebas
+test_*.py
+ai_worker/test_*.py
+search_service/test_*.py
+
+# Fixture de imagen de prueba (ya no se requiere si se omiten los tests)
+prueba.jpg
+
+# ------------------------------------------------------------------------------
+# 5. SEARCH SERVICE: DATOS EN CALIENTE (CÓDIGO FUENTE PRESERVADO)
+# ------------------------------------------------------------------------------
+# NOTA: search_service/ como carpeta NO se ignora porque Dockerfile, service_main.py,
+# vector_indexer.py y requirements.txt son componentes indispensables del sistema.
+# Solo se ignoran los índices y metadatos generados localmente:
+search_service/faces.index
+search_service/faces.json
+*.index
+
+# ------------------------------------------------------------------------------
+# 6. ENTORNOS VIRTUALES Y PAQUETES (PYTHON & NODE.JS)
+# ------------------------------------------------------------------------------
+env/
+venv/
+.venv/
+env*/
+ENV/
+
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------------------------------------------------------
+# 7. COMPILACIÓN, BUILDS Y CACHÉS
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+dist/
+frontend/dist/
+dist-ssr/
+*.tsbuildinfo
+.oxlint_cache/
+
+# ------------------------------------------------------------------------------
+# 8. MODELOS DE DEEP LEARNING Y ALMACENAMIENTO PERSISTENTE
+# ------------------------------------------------------------------------------
+.insightface/
+models/
+*.onnx
+*.onnx.*
+
+postgres_data/
+redis_data/
+minio_data/
+
+# ------------------------------------------------------------------------------
+# 9. EVIDENCIAS Y MULTIMEDIA TEMPORAL
+# ------------------------------------------------------------------------------
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.h264
+*.hevc
+temp_stream*
+
+*.tmp
+benchmark_report*.json
+temp_benchmark_*
+
+# ------------------------------------------------------------------------------
+# 10. ARCHIVOS DE SISTEMA OPERATIVO E IDEs
+# ------------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-project
+*.sublime-workspace
